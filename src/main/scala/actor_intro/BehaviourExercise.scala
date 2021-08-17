@@ -53,22 +53,25 @@ object BehaviourExercise extends App {
   class VoteAggregator extends Actor {
     def receive: Receive = {
       case AggregateVote(citizens) => citizens.foreach(_ ! VoteStatusRequest)
-                                      context.become(accumulatorState(Map.empty[String, Int]))
+                                      context.become(accumulatorState(Map.empty[String, Int], citizens))
       case ShowVoteResult          => println(s"Result Has Not Been Calculated Yet")
     }
 
-    def accumulatorState(voteStats: Map[String, Int]): Receive = {
+    def accumulatorState(voteStats: Map[String, Int], awaitingResult: Set[ActorRef]): Receive = {
       case VoteStatusReply(mayBeCandidate) =>
+        val newAwaitingResult = awaitingResult - sender()
         val updatedStats: Map[String, Int] = mayBeCandidate.map{ candidate =>
           val countForCandidate: Int = voteStats.getOrElse(candidate, 0) + 1
           voteStats + (candidate -> countForCandidate)
         }.getOrElse(voteStats)
-        println(s"***** Vote Result *****")
-        updatedStats.foreach{
-          case (candidate, vote) => println(s"$candidate - $vote")
+        if (newAwaitingResult.isEmpty){
+          println(s"***** Vote Result *****")
+          updatedStats.foreach{
+            case (candidate, vote) => println(s"$candidate - $vote")
+          }
+          println(s"***********************")
         }
-        println(s"***********************")
-        context.become(accumulatorState(updatedStats))
+        context.become(accumulatorState(updatedStats, newAwaitingResult))
     }
   }
 
